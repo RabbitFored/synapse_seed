@@ -13,23 +13,25 @@ synapse_seed/
 ├── .gitignore
 ├── README.md
 │
-├── scraping/                     # Data acquisition scripts
-│   ├── scrape_pyq.py             # Download PDFs from TNMGRMU website
-│   ├── analyze_pdfs.py           # Classify PDFs (digital/scanned/mixed)
-│   ├── split_pyq.py              # Split year-range PDFs → individual years
-│   └── extract_to_json.py        # Parse PDFs → structured JSON
+├── scraping/                     # Phase 1: Data acquisition
+│   ├── run_scraping.sh           # 🚀 Automates all 5 scraping steps
+│   ├── scrape_pyq.py             # Step 1: Download PDFs from TNMGRMU
+│   ├── organize_pyq.py           # Step 2: Organize by Subject/Year/Paper
+│   ├── analyze_pdfs.py           # Step 3: Classify (digital/scanned/mixed)
+│   ├── split_pyq.py              # Step 4: Split multi-year → individual year PDFs
+│   └── extract_to_json.py        # Step 5: Parse PDFs → structured JSON
 │
-├── pipeline/                     # AI-powered processing pipeline
+├── pipeline/                     # Phase 2: AI-powered processing
+│   ├── run_pipeline.sh           # 🚀 Automates flatten → canonicalize → seed
 │   ├── config.py                 # Central config (reads .env, exposes all paths/settings)
 │   ├── ollama_client.py          # Ollama API client (retry, timeout, /no_think)
 │   ├── flatten.py                # Stage 1: Raw JSON → flat question list
 │   ├── canonicalize.py           # Stage 2-4: Topic assignment, clustering, metadata
 │   ├── seed_mongo.py             # Stage 5: Push to MongoDB Atlas
 │   ├── export_to_app.py          # Export to Flutter app JSON schema
-│   ├── run_pipeline.sh           # Full pipeline runner (flatten → seed)
 │   └── taxonomy_keys/            # Subject-Paper-Chapter definitions
-│       ├── yr1_subject_paper_chapters.json  (Anatomy, Physiology, Biochemistry)
-│       └── yr2_subject_paper_chapters.json  (Pathology, Pharmacology, Microbiology)
+│       ├── yr1_subject_paper_chapters.json
+│       └── yr2_subject_paper_chapters.json
 │
 ├── data/                         # (gitignored) Raw PDFs, processed JSONs, pipeline output
 └── venv/                         # (gitignored) Python virtual environment
@@ -37,35 +39,54 @@ synapse_seed/
 
 ## Quick Start
 
+### 1. Setup
 ```bash
-# 1. Setup
 cp .env.example .env              # Fill in your Ollama URL & MongoDB URI
 python3 -m venv venv
 source venv/bin/activate
-pip install requests python-dotenv tqdm pymongo
+pip install requests python-dotenv tqdm pymongo beautifulsoup4 PyMuPDF
+```
 
-# 2. Run the full pipeline for a subject
+### 2. Scrape PYQs (one-time, ~10 min)
+```bash
+cd scraping
+chmod +x run_scraping.sh
+./run_scraping.sh
+```
+
+This runs all 5 steps automatically:
+| Step | Script | What it does |
+|------|--------|-------------|
+| 1 | `scrape_pyq.py` | Downloads all PYQ PDFs from TNMGRMU website |
+| 2 | `organize_pyq.py` | Copies and organizes by Subject → Year → Paper |
+| 3 | `analyze_pdfs.py` | Identifies digital vs scanned PDFs |
+| 4 | `split_pyq.py` | Splits combined year-range PDFs into individual years |
+| 5 | `extract_to_json.py` | Parses PDFs into structured JSON question data |
+
+### 3. Run the AI pipeline (~25 min per subject)
+```bash
 cd pipeline
-python flatten.py Pathology        # Stage 1: Flatten raw data
-python canonicalize.py Pathology   # Stage 2-4: AI canonicalization (~25 min)
-python seed_mongo.py Pathology     # Stage 5: Push to MongoDB
 
-# Or use the shell script:
+# Run for each subject individually:
+python flatten.py Pathology
+python canonicalize.py Pathology
+python seed_mongo.py Pathology
+
+# Or use the automation script:
+chmod +x run_pipeline.sh
 ./run_pipeline.sh Pathology
 ```
 
-## Taxonomy Standards
+## Supported Subjects
 
-Chapter classification follows standard Indian medical textbooks:
-
-| Subject | Textbook | Year |
-|---------|----------|------|
-| Anatomy | BD Chaurasia | 1st |
-| Physiology | GK Pal | 1st |
-| Biochemistry | DM Vasudevan | 1st |
-| Pathology | Robbins | 2nd |
-| Pharmacology | KD Tripathi | 2nd |
-| Microbiology | Apurba Sastry | 2nd |
+| Year | Subject | Textbook Standard | Paper Split |
+|------|---------|-------------------|-------------|
+| 1st | Anatomy | BD Chaurasia | Upper/Lower Limb, Abdomen+Pelvis / Thorax, Head+Neck, Neuro |
+| 1st | Physiology | GK Pal | General, Blood, GI, Renal, Endo, Repro / CVS, RS, CNS, ANS, Senses |
+| 1st | Biochemistry | DM Vasudevan | Cell, Enzymes, CHO, Lipid, Oxidation, Vitamins / Protein, Nucleotide, MolBio, Clinical |
+| 2nd | Pathology | Robbins | General Path + Hematology / Systemic Pathology |
+| 2nd | Pharmacology | KD Tripathi | General, ANS, CNS, CVS, RS, Blood, Kidney / GI, Hormones, Antimicrobials, Chemo |
+| 2nd | Microbiology | Apurba Sastry | General Micro, Immunology, Bacteriology / Virology, Parasitology, Mycology |
 
 ## Pipeline Configuration
 
