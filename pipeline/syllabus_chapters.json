@@ -1,0 +1,157 @@
+{
+  "Anatomy": [
+    "General Anatomy",
+    "Upper Limb",
+    "Lower Limb",
+    "Thorax",
+    "Abdomen & Pelvis",
+    "Head & Neck",
+    "Neuroanatomy",
+    "Embryology",
+    "Histology",
+    "Genetics"
+  ],
+  "Physiology": [
+    "General Physiology",
+    "Blood & Immunity",
+    "Nerve & Muscle Physiology",
+    "Cardiovascular System",
+    "Respiratory System",
+    "Gastrointestinal System",
+    "Renal System",
+    "Endocrine System",
+    "Reproductive System",
+    "Central Nervous System",
+    "Special Senses"
+  ],
+  "Biochemistry": [
+    "Cell & Organelles",
+    "Carbohydrate Metabolism",
+    "Lipid Metabolism",
+    "Protein & Amino Acid Metabolism",
+    "Enzymes & Vitamins",
+    "Minerals & Nutrition",
+    "Molecular Biology & Genetics",
+    "Clinical Biochemistry",
+    "Immunology & Cancer Biochemistry"
+  ],
+  "Pathology": [
+    "Cell Injury & Adaptation",
+    "Inflammation & Repair",
+    "Hemodynamics & Shock",
+    "Immunopathology",
+    "Neoplasia",
+    "Infectious Diseases",
+    "Genetics & Pediatrics",
+    "Environmental & Nutritional",
+    "Hematology (RBC & WBC)",
+    "Cardiovascular System",
+    "Respiratory System",
+    "Gastrointestinal Tract",
+    "Liver & Biliary Tract",
+    "Renal & Urinary System",
+    "Male Genital Tract",
+    "Female Genital Tract & Breast",
+    "Endocrine System",
+    "Musculoskeletal System",
+    "Central Nervous System"
+  ],
+  "Pharmacology": [
+    "General Pharmacology",
+    "Autonomic Nervous System",
+    "Central Nervous System",
+    "Cardiovascular System",
+    "Blood & Renal System",
+    "Respiratory & GI System",
+    "Endocrine Pharmacology",
+    "Chemotherapy & Antimicrobials",
+    "Autacoids & Related Drugs",
+    "Anti-Cancer & Immunosuppressants"
+  ],
+  "Microbiology": [
+    "General Microbiology",
+    "Immunology",
+    "Bacteriology (Systematic)",
+    "Virology",
+    "Mycology",
+    "Parasitology",
+    "Clinical/Applied Microbiology"
+  ],
+  "Forensic Medicine": [
+    "Medical Jurisprudence",
+    "Forensic Pathology & Autopsy",
+    "Forensic Traumatology (Injuries)",
+    "Asphyxial Deaths",
+    "Forensic Psychiatry & Sex Offenses",
+    "Toxicology - General",
+    "Toxicology - Specific Poisons"
+  ],
+  "Community Medicine": [
+    "Concepts of Health & Disease",
+    "Epidemiology & Screening",
+    "Communicable Diseases",
+    "Non-Communicable Diseases",
+    "Nutrition & Environment",
+    "Demography & Family Planning",
+    "Health Programs & Administration",
+    "Occupational Health"
+  ],
+  "ENT": [
+    "Ear: Anatomy, Deafness, Infections",
+    "Nose: Rhinitis, Sinusitis, Polyps",
+    "Pharynx & Oral Cavity",
+    "Larynx & Trachea",
+    "Neck Masses & Tumors"
+  ],
+  "Ophthalmology": [
+    "Refractive Errors & Optics",
+    "Conjunctiva & Cornea",
+    "Sclera & Uvea",
+    "Lens & Glaucoma",
+    "Retina & Vitreous",
+    "Neuro-ophthalmology & Optic Nerve",
+    "Squint & Strabismus",
+    "Eyelids, Orbit & Lacrimal System"
+  ],
+  "Medicine": [
+    "Infectious Diseases",
+    "Cardiology",
+    "Respiratory Medicine",
+    "Gastroenterology & Hepatology",
+    "Nephrology",
+    "Neurology",
+    "Endocrinology & Metabolism",
+    "Hematology",
+    "Rheumatology & Immunology",
+    "Toxicology & Envenomation"
+  ],
+  "Surgery": [
+    "General Surgery & Trauma",
+    "Shock, Fluids & Electrolytes",
+    "Head, Neck & Face",
+    "Breast & Endocrine",
+    "Cardiothoracic Surgery",
+    "Gastrointestinal Surgery",
+    "Hepatobiliary & Pancreatic Surgery",
+    "Hernia & Abdominal Wall",
+    "Urology",
+    "Orthopedics & Fractures"
+  ],
+  "OBG": [
+    "Normal Pregnancy & Antenatal Care",
+    "Complications of Pregnancy",
+    "Normal & Abnormal Labor",
+    "Puerperium",
+    "Gynecological Oncology",
+    "Infections & Infertility",
+    "Contraception & Demography"
+  ],
+  "Pediatrics": [
+    "Growth & Development",
+    "Neonatology",
+    "Nutrition & Immunization",
+    "Infectious Diseases",
+    "Systemic Pediatrics",
+    "Genetics & Inborn Errors"
+  ]
+}

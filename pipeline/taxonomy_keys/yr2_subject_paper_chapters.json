@@ -1,0 +1,130 @@
+{
+  "_meta": {
+    "description": "Year 2 MBBS Subject-Paper-Chapter Taxonomy Key (Unit Level)",
+    "version": "4.0",
+    "usage": "Broad 'Unit' classification based strictly on Robbins, KDT, and Apurba Sastry standard sections for optimal student learning",
+    "year_group": "year_2",
+    "year_display": "2nd Year MBBS"
+  },
+  "Pathology": {
+    "paper_1": {
+      "id": "paper_1",
+      "name": "Paper 1 — General Pathology & Hematology (Robbins)",
+      "paper_title_patterns": [
+        "GENERAL PATHOLOGY",
+        "HAEMATOLOGY",
+        "HEMATOLOGY",
+        "PATHOLOGY – I",
+        "PATHOLOGY - I",
+        "PATHOLOGY–I"
+      ],
+      "chapters": [
+        "Cell Injury, Adaptation and Death",
+        "Inflammation and Healing",
+        "Hemodynamic Disorders, Thrombosis and Shock",
+        "Diseases of the Immune System",
+        "Neoplasia",
+        "Genetic and Pediatric Diseases",
+        "Infectious and Environmental Diseases",
+        "Hematology",
+        "Clinical Pathology"
+      ]
+    },
+    "paper_2": {
+      "id": "paper_2",
+      "name": "Paper 2 — Systemic Pathology (Robbins)",
+      "paper_title_patterns": [
+        "SYSTEMIC PATHOLOGY",
+        "PATHOLOGY – II",
+        "PATHOLOGY - II",
+        "PATHOLOGY–II"
+      ],
+      "chapters": [
+        "Cardiovascular System",
+        "Respiratory System",
+        "Gastrointestinal System",
+        "Hepatobiliary System and Pancreas",
+        "Renal and Urinary System",
+        "Male Genital System",
+        "Female Genital System and Breast",
+        "Endocrine System",
+        "Central and Peripheral Nervous System",
+        "Musculoskeletal System and Skin"
+      ]
+    }
+  },
+  "Pharmacology": {
+    "paper_1": {
+      "id": "paper_1",
+      "name": "Paper 1 — Pharmacology I (KDT Sections)",
+      "paper_title_patterns": [
+        "PHARMACOLOGY – I",
+        "PHARMACOLOGY - I",
+        "PHARMACOLOGY I"
+      ],
+      "chapters": [
+        "General Pharmacology",
+        "Autonomic Nervous System",
+        "Central Nervous System",
+        "Cardiovascular System",
+        "Respiratory System",
+        "Blood",
+        "Kidney",
+        "Autacoids",
+        "PNS"
+      ]
+    },
+    "paper_2": {
+      "id": "paper_2",
+      "name": "Paper 2 — Pharmacology II (KDT Sections)",
+      "paper_title_patterns": [
+        "PHARMACOLOGY – II",
+        "PHARMACOLOGY - II",
+        "PHARMACOLOGY II"
+      ],
+      "chapters": [
+        "Gastrointestinal System",
+        "Hormones",
+        "Antimicrobials",
+        "Chemotherapy",
+        "Miscellaneous and Toxicology"
+      ]
+    }
+  },
+  "Microbiology": {
+    "paper_1": {
+      "id": "paper_1",
+      "name": "Paper 1 — General Microbiology, Immunology & Bacteriology (Apurba Sastry)",
+      "paper_title_patterns": [
+        "GENERAL MICROBIOLOGY",
+        "IMMUNOLOGY",
+        "MICROBIOLOGY – I",
+        "MICROBIOLOGY - I"
+      ],
+      "chapters": [
+        "General Microbiology",
+        "Immunology",
+        "Hospital Infection Control",
+        "Skin",
+        "Systemic Bacteriology"
+      ]
+    },
+    "paper_2": {
+      "id": "paper_2",
+      "name": "Paper 2 — Virology, Mycology & Parasitology (Apurba Sastry)",
+      "paper_title_patterns": [
+        "VIROLOGY",
+        "MYCOLOGY",
+        "PARASITOLOGY",
+        "MICROBIOLOGY – II",
+        "MICROBIOLOGY - II"
+      ],
+      "chapters": [
+        "Virology",
+        "Parasitology",
+        "Mycology",
+        "Applied and Clinical Microbiology"
+      ]
+    }
+  }
+}

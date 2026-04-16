@@ -1,0 +1,22 @@
+# Virtual environment
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data (Raw, Flattened, & Pipeline Output)
+# We ignore the data folder to avoid bloating the git repo with thousands of JSON files & PYQs
+data/
+
+# Logs
+*.log
+
+# Environments
+.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
