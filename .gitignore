@@ -1,3 +1,6 @@
+# Secrets
+.env
+
 # Virtual environment
 venv/
 env/
@@ -7,16 +10,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Data (Raw, Flattened, & Pipeline Output)
-# We ignore the data folder to avoid bloating the git repo with thousands of JSON files & PYQs
+# Data (raw PDFs, intermediate JSONs, pipeline output)
 data/
 
 # Logs
 *.log
 
-# Environments
-.env
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db

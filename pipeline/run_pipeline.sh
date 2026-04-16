@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Synapse PYQ Seeding Pipeline
+# Synapse PYQ Pipeline — Full run for a single subject
 # Usage: ./run_pipeline.sh [Subject]
 # Example: ./run_pipeline.sh Pathology
 # ============================================================
@@ -9,6 +9,12 @@ set -e
 
 SUBJECT="${1:-Pathology}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Activate virtual environment
+if [ -f "$PROJECT_ROOT/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/venv/bin/activate"
+fi
 
 echo "╔══════════════════════════════════════════════╗"
 echo "║  Synapse PYQ Seeding Pipeline                ║"

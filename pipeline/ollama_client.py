@@ -1,29 +1,21 @@
 """
 Ollama API Client — Optimized for low-resource servers
 ========================================================
-- Longer timeouts (5 min) to avoid 504s behind reverse proxies
-- Uses /no_think tag for qwen3 to skip chain-of-thought (2-3x faster)
-- Configurable via OLLAMA_API and OLLAMA_MODEL in synapse/.env
+- 5-min timeout to avoid 504s behind reverse proxies
+- /no_think tag for qwen3 (skips chain-of-thought, 2-3x faster)
+- Retries with exponential backoff on 502/504/timeout
 """
 
 import requests
 import json
-import os
 import time
 import re
 
-try:
-    from dotenv import load_dotenv
-    _env_path = os.path.join(os.path.dirname(__file__), '..', '..', 'synapse', '.env')
-    load_dotenv(_env_path)
-except ImportError:
-    pass
+import config
 
-OLLAMA_URL = os.environ.get('OLLAMA_API', 'http://127.0.0.1:11434').rstrip('/')
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen3:8b')
-
-# Long timeout — critical for CPU-only instances behind reverse proxies
-REQUEST_TIMEOUT = 300  # 5 minutes
+OLLAMA_URL = config.OLLAMA_URL
+OLLAMA_MODEL = config.OLLAMA_MODEL
+REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
 
 
 def generate(prompt, temperature=0.3):
@@ -35,8 +27,8 @@ def generate(prompt, temperature=0.3):
         "stream": False,
         "options": {
             "temperature": temperature,
-            "num_predict": 2048,    # cap output length
-            "num_ctx": 4096,        # smaller context = faster
+            "num_predict": 2048,
+            "num_ctx": 4096,
         }
     }
 
@@ -71,7 +63,6 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
             response.raise_for_status()
             text = response.json().get('response', '')
 
-            # Extract JSON from response
             json_match = re.search(r'\{[\s\S]*\}', text)
             if json_match:
                 return json.loads(json_match.group())

@@ -1,60 +1,81 @@
-# Synapse Data Seeder Pipeline
+# Synapse Seed — Medical PYQ Data Pipeline
 
-This directory contains the automated data pipeline tools to scrape, process, canonicalize, and seed medical exam questions (PYQs) into the Synapse app's MongoDB database.
+Automated pipeline to scrape, process, canonicalize, and seed MBBS exam questions (PYQs) into the **Synapse** Flutter app's MongoDB database.
 
-## Architecture
+Uses local AI (Ollama + `qwen3:8b`) to cluster raw exam questions into structured, syllabus-compliant study topics.
 
-The pipeline uses local AI (Ollama + `qwen3:8b`) to canonicalize unorganized raw exam questions into structured, syllabus-compliant Study Topics.
+## Project Structure
 
-```text
+```
 synapse_seed/
-├── data/                    # (Git ignored) Raw pyq PDFs, flattened JSONs, and final pipeline outputs
-├── venv/                    # (Git ignored) Python virtual environment
-├── pipeline/                # The main pipeline scripts
-│   ├── flatten.py           # Stage 1: Flattens hierarchical JSON into a flat list of questions
-│   ├── canonicalize.py      # Stage 2-4: Assigns topics, clusters questions, generates metadata (uses Ollama)
-│   ├── ollama_client.py     # Custom Ollama API integration with progress/retry logic
-│   ├── seed_mongo.py        # Stage 5: Seeds the processed `clustered_topics.json` into MongoDB
-│   ├── export_to_app.py     # Legacy export script
-│   └── taxonomy_keys/       # Strict subject-paper-chapter JSON definitions based on standard textbooks
-└── *.py (Root)              # Initial scraping & splitting scripts (scrape_pyq, split_pyq, etc.)
+├── .env                          # Secrets & config (gitignored)
+├── .env.example                  # Template for collaborators
+├── .gitignore
+├── README.md
+│
+├── scraping/                     # Data acquisition scripts
+│   ├── scrape_pyq.py             # Download PDFs from TNMGRMU website
+│   ├── analyze_pdfs.py           # Classify PDFs (digital/scanned/mixed)
+│   ├── split_pyq.py              # Split year-range PDFs → individual years
+│   └── extract_to_json.py        # Parse PDFs → structured JSON
+│
+├── pipeline/                     # AI-powered processing pipeline
+│   ├── config.py                 # Central config (reads .env, exposes all paths/settings)
+│   ├── ollama_client.py          # Ollama API client (retry, timeout, /no_think)
+│   ├── flatten.py                # Stage 1: Raw JSON → flat question list
+│   ├── canonicalize.py           # Stage 2-4: Topic assignment, clustering, metadata
+│   ├── seed_mongo.py             # Stage 5: Push to MongoDB Atlas
+│   ├── export_to_app.py          # Export to Flutter app JSON schema
+│   ├── run_pipeline.sh           # Full pipeline runner (flatten → seed)
+│   └── taxonomy_keys/            # Subject-Paper-Chapter definitions
+│       ├── yr1_subject_paper_chapters.json  (Anatomy, Physiology, Biochemistry)
+│       └── yr2_subject_paper_chapters.json  (Pathology, Pharmacology, Microbiology)
+│
+├── data/                         # (gitignored) Raw PDFs, processed JSONs, pipeline output
+└── venv/                         # (gitignored) Python virtual environment
 ```
 
-## How to Run
+## Quick Start
 
-1. **Activate the Virtual Environment:**
-   Make sure you activate the python environment to use the `tqdm` and `requests` libraries.
-   ```bash
-   source venv/bin/activate
-   ```
+```bash
+# 1. Setup
+cp .env.example .env              # Fill in your Ollama URL & MongoDB URI
+python3 -m venv venv
+source venv/bin/activate
+pip install requests python-dotenv tqdm pymongo
 
-2. **Step 1: Flatten the Data**
-   Prepare the raw JSONs for the AI model:
-   ```bash
-   cd pipeline
-   python flatten.py Pathology
-   ```
+# 2. Run the full pipeline for a subject
+cd pipeline
+python flatten.py Pathology        # Stage 1: Flatten raw data
+python canonicalize.py Pathology   # Stage 2-4: AI canonicalization (~25 min)
+python seed_mongo.py Pathology     # Stage 5: Push to MongoDB
 
-3. **Step 2-4: Canonicalize & Cluster**
-   This script calls the local Ollama instance. It is highly optimized for lower-resource 4-core CPUs (batch sizes of 10, `/no_think` model behavior, 5-minute timeout tolerances). It supports automatic resuming if interrupted.
-   ```bash
-   python canonicalize.py Pathology
-   ```
-
-4. **Step 5: Seed MongoDB**
-   Verify the `.env` MongoDB URI in the parent `synapse/` folder, then push the data to production:
-   ```bash
-   python seed_mongo.py Pathology
-   ```
+# Or use the shell script:
+./run_pipeline.sh Pathology
+```
 
 ## Taxonomy Standards
 
-The app's navigation strictly adheres to proper medical textbook standards:
-- **Anatomy:** BD Chaurasia Units
-- **Physiology:** GK Pal Units
-- **Biochemistry:** DM Vasudevan Units
-- **Pathology:** Robbins Units
-- **Pharmacology:** KD Tripathi Sections
-- **Microbiology:** Apurba Sastry Sections
+Chapter classification follows standard Indian medical textbooks:
 
-The `taxonomy_keys/` folder controls this. The AI guarantees that every clustered topic maps cleanly to exactly one of these pre-defined chapters.
+| Subject | Textbook | Year |
+|---------|----------|------|
+| Anatomy | BD Chaurasia | 1st |
+| Physiology | GK Pal | 1st |
+| Biochemistry | DM Vasudevan | 1st |
+| Pathology | Robbins | 2nd |
+| Pharmacology | KD Tripathi | 2nd |
+| Microbiology | Apurba Sastry | 2nd |
+
+## Pipeline Configuration
+
+All settings are in `pipeline/config.py` (loaded from `.env`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `CANON_BATCH_SIZE` | 10 | Questions per Ollama call |
+| `META_BATCH_SIZE` | 5 | Topics per metadata call |
+| `COOLDOWN_SECONDS` | 3 | Pause between batches |
+| `REQUEST_TIMEOUT` | 300s | HTTP timeout for Ollama |
+
+Tuned for 4-core CPU instances (Oracle Cloud free tier).

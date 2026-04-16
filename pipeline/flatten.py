@@ -12,15 +12,15 @@ import re
 import sys
 import hashlib
 
-BASE_JSON_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'pyq', 'TNMGRU', 'processed', 'json')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'pipeline_output')
+import config
+
+BASE_JSON_DIR = config.RAW_JSON_DIR
+OUTPUT_DIR = config.OUTPUT_DIR
 
 
 def clean_question_text(text: str) -> str:
     """Remove leading question numbers, trailing asterisks, and extra whitespace."""
-    # Remove leading numbers like "1. " or "0. "
     text = re.sub(r'^\d+\.\s*', '', text.strip())
-    # Remove trailing asterisks (OCR artifacts)
     text = re.sub(r'\*+$', '', text).strip()
     return text
 
@@ -44,7 +44,7 @@ def flatten_subject(subject: str) -> list[dict]:
         year_path = os.path.join(subject_dir, year_dir)
         if not os.path.isdir(year_path):
             continue
-            
+
         try:
             year_int = int(year_dir)
             if year_int < 2016 or year_int > 2025:
@@ -74,7 +74,7 @@ def flatten_subject(subject: str) -> list[dict]:
                 max_marks = session.get('max_marks', 0)
 
                 for section in session.get('theory_sections', []):
-                    section_type = section.get('section', '')  # Essay, Short Notes, Short Answers
+                    section_type = section.get('section', '')
                     marks_info = section.get('marks') or {}
                     marks_each = marks_info.get('each', 0)
 

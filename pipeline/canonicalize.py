@@ -3,19 +3,17 @@ Stage 2-4: Canonicalize, Cluster, and Generate Metadata using Ollama
 ====================================================================
 Optimized for low-resource CPU servers (Oracle 4-core / 24GB RAM)
 
-Key optimizations:
-  - Small batches (10 questions / 5 topics) to avoid timeouts
-  - Cooldown between batches to prevent sustained 100% CPU
-  - /no_think prefix for qwen3 models (skips chain-of-thought)
-  - Tight, focused prompts — minimal hallucination
-  - Resume-safe: re-run the same command to continue
+Key features:
+  - Small batches to avoid timeouts
+  - Cooldown between batches to reduce CPU pressure
+  - /no_think prefix for qwen3 (skips chain-of-thought, 2-3x faster)
+  - Resume-safe: re-run same command to continue from where it stopped
+  - BUG FIX: Only saves valid topic mappings to progress (prevents 0/429 ghost entries)
 
 Usage:
   python canonicalize.py Pathology
   python canonicalize.py Pharmacology
   python canonicalize.py Microbiology
-
-Output: data/pipeline_output/<Subject>/clustered_topics.json
 """
 
 import json
@@ -30,15 +28,14 @@ except ImportError:
     print("❌ tqdm not installed. Run: pip install tqdm")
     sys.exit(1)
 
+import config
 import ollama_client
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'data', 'pipeline_output')
-TAXONOMY_DIR = os.path.join(os.path.dirname(__file__), 'taxonomy_keys')
-
-# ---------- Batch sizes tuned for 4-core CPU ----------
-CANON_BATCH_SIZE = 10    # small batches = no timeouts
-META_BATCH_SIZE = 5      # metadata prompts are heavier
-COOLDOWN_SECONDS = 3     # let CPU breathe between batches
+OUTPUT_DIR = config.OUTPUT_DIR
+TAXONOMY_DIR = config.TAXONOMY_DIR
+CANON_BATCH_SIZE = config.CANON_BATCH_SIZE
+META_BATCH_SIZE = config.META_BATCH_SIZE
+COOLDOWN_SECONDS = config.COOLDOWN_SECONDS
 
 
 # =====================================================
@@ -98,8 +95,11 @@ def resolve_paper_for_topic(topic_questions, taxonomy):
 def load_progress(filepath):
     if os.path.exists(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        # Filter out invalid entries (the root cause of the 0/429 bug)
+        return {k: v for k, v in data.items() if isinstance(v, str) and v.strip()}
     return {}
+
 
 def save_progress(filepath, data):
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -116,7 +116,6 @@ def canonicalize_batch(questions_batch):
     lines = [f"{q['id']}: {q['text']}" for q in questions_batch]
     text = "\n".join(lines)
 
-    # /no_think disables qwen3's chain-of-thought — 2-3x faster
     prompt = f"""/no_think
 Assign a canonical medical topic name to each question. Rules:
 - Concise standard topic (e.g. "Necrosis", "Shock", "Iron Deficiency Anemia")
@@ -155,10 +154,16 @@ def run_stage2(questions, subject):
                     time.sleep(COOLDOWN_SECONDS * 2)
                     result = canonicalize_batch(batch)
 
-                matched = 0
+                # ── BUG FIX: Only save valid non-empty topic mappings ──
+                valid_count = 0
                 if result:
-                    id_to_topic.update(result)
-                    matched = len(result)
+                    for qid, topic in result.items():
+                        if isinstance(topic, str) and topic.strip():
+                            id_to_topic[qid] = topic.strip()
+                            valid_count += 1
+
+                if valid_count == 0 and result is not None:
+                    tqdm.write(f"  ⚠️ Batch returned no valid topics")
 
                 pbar.update(len(batch))
                 save_progress(progress_path, id_to_topic)
@@ -249,7 +254,14 @@ Return JSON: {{"0": {{"chapter":"...", "display_title":"...", "study_checklist":
 
 def run_stage4(sorted_topics, subject, taxonomy):
     metadata_path = os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json')
-    existing = load_progress(metadata_path)
+    existing = load_progress(metadata_path) if os.path.exists(os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json')) else {}
+    # For metadata, load raw (it's not {id: string}, it's {name: dict})
+    if os.path.exists(os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json')):
+        with open(os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json'), 'r') as f:
+            existing = json.load(f)
+    else:
+        existing = {}
+
     all_chapters = get_all_chapters(taxonomy)
 
     needs_work = [(n, q) for n, q in sorted_topics
@@ -287,7 +299,7 @@ def run_stage4(sorted_topics, subject, taxonomy):
                         }
 
                 pbar.update(len(batch))
-                save_progress(metadata_path, existing)
+                save_progress(os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json'), existing)
                 time.sleep(COOLDOWN_SECONDS)
 
     return existing
