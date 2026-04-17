@@ -24,7 +24,7 @@ def generate(prompt, temperature=0.3):
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
-        "stream": False,
+        "stream": True,
         "options": {
             "temperature": temperature,
             "num_predict": 2048,
@@ -33,9 +33,18 @@ def generate(prompt, temperature=0.3):
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+        response = requests.post(url, json=payload, stream=True, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
-        return response.json().get('response', '')
+
+        full_text = ""
+        for line in response.iter_lines():
+            if line:
+                data = json.loads(line)
+                if 'response' in data:
+                    full_text += data['response']
+                if data.get('done'):
+                    break
+        return full_text
     except Exception as e:
         print(f"    ❌ Ollama Error: {e}")
         return None
@@ -48,7 +57,7 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
         "model": OLLAMA_MODEL,
         "prompt": prompt,
         "format": "json",
-        "stream": False,
+        "stream": True,
         "options": {
             "temperature": temperature,
             "num_predict": 4096,
@@ -59,9 +68,17 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
     backoff = 5
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+            response = requests.post(url, json=payload, stream=True, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
-            text = response.json().get('response', '')
+
+            text = ""
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line)
+                    if 'response' in data:
+                        text += data['response']
+                    if data.get('done'):
+                        break
 
             json_match = re.search(r'\[[\s\S]*\]|\{[\s\S]*\}', text)
             if json_match:
