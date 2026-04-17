@@ -122,7 +122,8 @@ Assign a canonical medical topic name to each question. Rules:
 - Similar questions get the SAME topic name
 - NOT chapter names like "General Pathology"
 
-Return JSON only: {{"question_id": "Topic Name"}}
+Return a JSON object mapping each question ID to its Topic Name:
+{{"id_1": "Topic Name", "id_2": "Topic Name"}}
 
 {text}"""
 
