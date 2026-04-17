@@ -33,8 +33,8 @@ MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017')
 MONGO_DB = os.environ.get('MONGO_DB', 'synapse_db')
 
 # ── Pipeline Tuning (optimized for 4-core CPU) ─────────────
-CANON_BATCH_SIZE = 10    # questions per Ollama call (canonicalization)
-META_BATCH_SIZE = 5      # topics per Ollama call (metadata generation)
+CANON_BATCH_SIZE = 5     # questions per Ollama call (canonicalization)
+META_BATCH_SIZE = 3      # topics per Ollama call (metadata generation)
 COOLDOWN_SECONDS = 3     # pause between batches to reduce CPU pressure
 REQUEST_TIMEOUT = 300    # 5 min HTTP timeout for slow CPU inference
 
