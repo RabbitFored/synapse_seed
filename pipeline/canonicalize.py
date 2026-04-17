@@ -122,8 +122,16 @@ Assign a canonical medical topic name to each question. Rules:
 - Similar questions get the SAME topic name
 - NOT chapter names like "General Pathology"
 
-Return JSON only: {{"question_id": "Topic Name"}}
+Return a JSON dictionary mapping the EXACT question ID from the prompt to its assigned topic name.
+DO NOT use "id1" or "id2" or "question_id". Use the actual question ID provided.
 
+Example format:
+{{
+  "actual_question_id_here": "Topic1",
+  "another_question_id_here": "Topic2"
+}}
+
+Questions:
 {text}"""
 
     return ollama_client.generate_json(prompt)

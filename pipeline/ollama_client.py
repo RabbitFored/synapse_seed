@@ -63,7 +63,7 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
             response.raise_for_status()
             text = response.json().get('response', '')
 
-            json_match = re.search(r'\{[\s\S]*\}', text)
+            json_match = re.search(r'\[[\s\S]*\]|\{[\s\S]*\}', text)
             if json_match:
                 return json.loads(json_match.group())
             else:
