@@ -157,9 +157,28 @@ def run_stage2(questions, subject):
                 # ── BUG FIX: Only save valid non-empty topic mappings ──
                 valid_count = 0
                 if result:
-                    for qid, topic in result.items():
-                        if isinstance(topic, str) and topic.strip():
-                            id_to_topic[qid] = topic.strip()
+                    extracted = {}
+                    if isinstance(result, list):
+                        for item in result:
+                            if isinstance(item, dict):
+                                qid = item.get("id") or item.get("question_id")
+                                topic = item.get("topic") or item.get("topic_name") or item.get("Topic Name") or item.get("canonical_topic")
+                                if qid and topic and isinstance(topic, str):
+                                    extracted[qid] = topic
+                    elif isinstance(result, dict):
+                        qid = result.get("id") or result.get("question_id")
+                        topic = result.get("topic") or result.get("topic_name") or result.get("Topic Name") or result.get("canonical_topic")
+                        if qid and topic and isinstance(topic, str) and qid != "Topic Name" and topic != "Topic Name":
+                            extracted[qid] = topic
+                        else:
+                            for k, v in result.items():
+                                if k not in ["id", "question_id", "topic", "topic_name", "Topic Name", "canonical_topic"] and isinstance(v, str):
+                                    if k != "question_id":
+                                        extracted[k] = v
+
+                    for qid, topic in extracted.items():
+                        if isinstance(topic, str) and topic.strip() and qid != "question_id":
+                            id_to_topic[str(qid)] = topic.strip()
                             valid_count += 1
 
                 if valid_count == 0 and result is not None:
