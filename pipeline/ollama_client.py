@@ -1,9 +1,10 @@
 """
-Ollama API Client — Optimized for low-resource servers
+Ollama API Client — For local/remote Ollama instances
 ========================================================
-- 5-min timeout to avoid 504s behind reverse proxies
+- Configurable timeout
 - /no_think tag for qwen3 (skips chain-of-thought, 2-3x faster)
-- Retries with exponential backoff on 502/504/timeout
+- Retries with exponential backoff on all failure types
+- FIXED: JSON decode and no-JSON errors now properly retry
 """
 
 import requests
@@ -16,6 +17,7 @@ import config
 OLLAMA_URL = config.OLLAMA_URL
 OLLAMA_MODEL = config.OLLAMA_MODEL
 REQUEST_TIMEOUT = config.REQUEST_TIMEOUT
+MAX_RETRIES = config.MAX_RETRIES
 
 
 def generate(prompt, temperature=0.3):
@@ -50,8 +52,11 @@ def generate(prompt, temperature=0.3):
         return None
 
 
-def generate_json(prompt, temperature=0.2, max_retries=3):
+def generate_json(prompt, temperature=0.2, max_retries=None):
     """Generate JSON from Ollama with retries. Returns parsed dict or None."""
+    if max_retries is None:
+        max_retries = MAX_RETRIES
+
     url = f"{OLLAMA_URL}/api/generate"
     payload = {
         "model": OLLAMA_MODEL,
@@ -82,14 +87,21 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
 
             json_match = re.search(r'\[[\s\S]*\]|\{[\s\S]*\}', text)
             if json_match:
-                return json.loads(json_match.group())
+                try:
+                    return json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    # FIXED: actually retry instead of returning empty
+                    print(f"    ⚠️ Invalid JSON (attempt {attempt+1}/{max_retries})")
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 30)
+                    continue
             else:
-                print(f"    ⚠️ No JSON in response (attempt {attempt+1})")
-                return {}
+                # FIXED: actually retry instead of returning empty
+                print(f"    ⚠️ No JSON in response (attempt {attempt+1}/{max_retries})")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+                continue
 
-        except json.JSONDecodeError:
-            print(f"    ⚠️ Invalid JSON (attempt {attempt+1})")
-            return {}
         except requests.exceptions.Timeout:
             print(f"    ⏳ Timeout (attempt {attempt+1}/{max_retries}) — waiting {backoff}s...")
             time.sleep(backoff)
@@ -101,10 +113,12 @@ def generate_json(prompt, temperature=0.2, max_retries=3):
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 30)
             else:
-                print(f"    ❌ Ollama Error: {e}")
+                print(f"    ❌ Ollama Error: {e} (attempt {attempt+1})")
                 if attempt < max_retries - 1:
                     time.sleep(backoff)
+                    backoff = min(backoff * 2, 30)
                 else:
                     return None
 
+    print(f"    ❌ Ollama failed after {max_retries} attempts")
     return None

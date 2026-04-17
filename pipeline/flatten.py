@@ -3,6 +3,8 @@ Stage 1: Flatten & Normalize
 Reads all JSON question paper files for a given subject and produces
 a single flat list of question dictionaries.
 
+FIXED: Removed hardcoded 2016-2025 year filter — now processes ALL available years.
+
 Output: data/pipeline_output/<Subject>/flattened_questions.json
 """
 
@@ -45,12 +47,11 @@ def flatten_subject(subject: str) -> list[dict]:
         if not os.path.isdir(year_path):
             continue
 
+        # FIXED: Accept any valid numeric year (no hardcoded range)
         try:
             year_int = int(year_dir)
-            if year_int < 2016 or year_int > 2025:
-                continue
         except ValueError:
-            pass
+            continue  # Skip non-numeric year directories
 
         for json_file in sorted(os.listdir(year_path)):
             if not json_file.endswith('.json'):
@@ -116,6 +117,11 @@ def main():
 
     questions = flatten_subject(subject)
     print(f"✅ Extracted {len(questions)} questions from {subject}")
+
+    # Year range info
+    if questions:
+        years = sorted(set(q['year'] for q in questions))
+        print(f"📅 Years: {years[0]}–{years[-1]} ({len(years)} years)")
 
     # Save output
     out_dir = os.path.join(OUTPUT_DIR, subject)

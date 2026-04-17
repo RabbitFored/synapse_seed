@@ -6,11 +6,17 @@
 #   ./run_pipeline.sh                  # Process ALL subjects from taxonomy keys
 #   ./run_pipeline.sh Pathology        # Process a single subject
 #   ./run_pipeline.sh --ping           # Test MongoDB connectivity
+#   ./run_pipeline.sh --config         # Show current config
 #
 # Stages per subject:
 #   1. Flatten raw JSON → flat question list
-#   2-4. Ollama AI: Canonicalize topics, cluster, generate metadata
-#   5. Seed to MongoDB Atlas
+#   2-4. AI: Canonicalize topics, cluster, generate metadata
+#   5. Seed to MongoDB Atlas (upsert mode)
+#
+# AI Provider (set in .env):
+#   gemini  — Google Gemini 2.0 Flash (recommended, ~15 min/subject)
+#   groq    — Groq Cloud (fast, ~10 min/subject)
+#   ollama  — Local Ollama (slow, ~2-3 hrs/subject)
 # ============================================================
 
 set -e
@@ -29,26 +35,16 @@ if [ ! -f "$PYTHON" ]; then
     PYTHON="python3"
 fi
 
+# ── Config test ──
+if [ "$1" = "--config" ]; then
+    $PYTHON "$SCRIPT_DIR/config.py"
+    exit 0
+fi
+
 # ── MongoDB ping test ──
 if [ "$1" = "--ping" ]; then
     echo "🔌 Testing MongoDB connection..."
-    $PYTHON -c "
-import config
-from pymongo import MongoClient
-client = MongoClient(config.MONGO_URI.strip(), serverSelectionTimeoutMS=10000)
-try:
-    client.admin.command('ping')
-    db = client[config.MONGO_DB]
-    print('✅ MongoDB connection successful!')
-    print(f'   Database: {config.MONGO_DB}')
-    for coll in db.list_collection_names():
-        count = db[coll].count_documents({})
-        print(f'   {coll}: {count} documents')
-    client.close()
-except Exception as e:
-    print(f'❌ MongoDB connection failed: {e}')
-    exit(1)
-"
+    $PYTHON "$SCRIPT_DIR/seed_mongo.py" --ping
     exit 0
 fi
 
@@ -92,7 +88,7 @@ process_subject() {
     $PYTHON "$SCRIPT_DIR/canonicalize.py" "$SUBJECT"
 
     echo ""
-    echo "  ━━━ Stage 5: Seed MongoDB ━━━"
+    echo "  ━━━ Stage 5: Seed MongoDB (upsert) ━━━"
     $PYTHON "$SCRIPT_DIR/seed_mongo.py" "$SUBJECT"
 
     local END_TIME=$(date +%s)
@@ -105,6 +101,11 @@ process_subject() {
 
 # ── Main ──
 TOTAL_START=$(date +%s)
+
+# Show provider info
+echo ""
+echo "  🤖 AI Provider: $($PYTHON -c 'import ai_client; print(ai_client.get_provider_info())')"
+echo ""
 
 if [ -n "$1" ] && [ "$1" != "--all" ]; then
     # Single subject mode

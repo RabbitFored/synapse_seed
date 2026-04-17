@@ -1,7 +1,10 @@
 """
-Stage 5: Seed MongoDB Atlas
-============================
-Takes clustered_topics.json and inserts into MongoDB with proper schema.
+Stage 5: Seed MongoDB Atlas — Upsert Mode
+============================================
+Takes clustered_topics.json and upserts into MongoDB with proper schema.
+
+CHANGED: Uses upsert instead of delete-all + insert for crash resilience.
+Can be run incrementally — new data is merged, not destructive.
 
 Safety: Refuses to seed if source has 0 topics.
 
@@ -20,7 +23,8 @@ Schema:
 
 Usage:
   python seed_mongo.py Pathology
-  python seed_mongo.py --ping          # Test connection only
+  python seed_mongo.py Pathology --clean   # Delete + re-insert (old behavior)
+  python seed_mongo.py --ping              # Test connection only
 """
 
 import json
@@ -28,7 +32,7 @@ import os
 import sys
 
 try:
-    from pymongo import MongoClient
+    from pymongo import MongoClient, UpdateOne
 except ImportError:
     print("❌ pymongo not installed. Run: pip install pymongo")
     sys.exit(1)
@@ -63,7 +67,7 @@ def ping():
         sys.exit(1)
 
 
-def seed(subject):
+def seed(subject, clean_mode=False):
     """Seed a subject's clustered_topics.json into MongoDB."""
     input_path = os.path.join(config.OUTPUT_DIR, subject, 'clustered_topics.json')
 
@@ -82,7 +86,9 @@ def seed(subject):
         sys.exit(1)
 
     total_questions = sum(t.get('frequency_count', 0) for t in topics_data)
+    mode_str = "CLEAN (delete + insert)" if clean_mode else "UPSERT (incremental)"
     print(f"📚 Seeding {subject}: {len(topics_data)} topics, {total_questions} questions")
+    print(f"   Mode: {mode_str}")
 
     # Connect
     client = MongoClient(config.MONGO_URI.strip(), serverSelectionTimeoutMS=10000)
@@ -95,24 +101,30 @@ def seed(subject):
 
     db = client[config.MONGO_DB]
 
-    # Clear existing data for this subject (idempotent)
-    print(f"🗑️  Clearing existing {subject} data...")
-    old_topics = db.topics.count_documents({'subject': subject})
-    old_questions = db.questions.count_documents({'subject': subject})
-    db.topics.delete_many({'subject': subject})
-    db.questions.delete_many({'subject': subject})
-    if old_topics:
-        print(f"   Removed {old_topics} old topics, {old_questions} old questions")
+    if clean_mode:
+        # Old behavior: wipe and re-insert
+        print(f"🗑️  Clearing existing {subject} data...")
+        old_topics = db.topics.count_documents({'subject': subject})
+        old_questions = db.questions.count_documents({'subject': subject})
+        db.topics.delete_many({'subject': subject})
+        db.questions.delete_many({'subject': subject})
+        if old_topics:
+            print(f"   Removed {old_topics} old topics, {old_questions} old questions")
 
-    # ── Insert Topics & Questions ──
-    topics_inserted = 0
-    questions_inserted = 0
+    # ── Upsert Topics & Questions ──
+    topics_upserted = 0
+    questions_upserted = 0
 
     for topic in topics_data:
         questions_list = topic.pop('questions', [])
 
         # Determine if high-yield (asked 3+ times)
         is_high_yield = topic.get('frequency_count', 0) >= 3
+
+        topic_filter = {
+            'topic_name': topic['topic_name'],
+            'subject': subject,
+        }
 
         topic_doc = {
             'topic_name': topic['topic_name'],
@@ -128,28 +140,44 @@ def seed(subject):
             'year_frequency': topic.get('year_frequency', {}),
         }
 
-        result = db.topics.insert_one(topic_doc)
-        topic_id = result.inserted_id
-        topics_inserted += 1
+        # Upsert topic
+        result = db.topics.update_one(
+            topic_filter,
+            {'$set': topic_doc},
+            upsert=True
+        )
 
-        question_docs = []
-        for q in questions_list:
-            question_docs.append({
-                'topic_id': topic_id,
-                'question_id': q.get('id', ''),
-                'text': q['text'],
-                'subject': subject,
-                'year': q.get('year'),
-                'month': q.get('month', ''),
-                'paper': q.get('paper', ''),
-                'paper_title': q.get('paper_title', ''),
-                'section': q.get('section', ''),
-                'marks': q.get('marks', 0),
-            })
+        # Get the topic_id (either existing or new)
+        if result.upserted_id:
+            topic_id = result.upserted_id
+        else:
+            existing_topic = db.topics.find_one(topic_filter)
+            topic_id = existing_topic['_id']
 
-        if question_docs:
-            db.questions.insert_many(question_docs)
-            questions_inserted += len(question_docs)
+        topics_upserted += 1
+
+        # Upsert questions
+        if questions_list:
+            q_ops = []
+            for q in questions_list:
+                q_filter = {'question_id': q.get('id', ''), 'subject': subject}
+                q_doc = {
+                    'topic_id': topic_id,
+                    'question_id': q.get('id', ''),
+                    'text': q['text'],
+                    'subject': subject,
+                    'year': q.get('year'),
+                    'month': q.get('month', ''),
+                    'paper': q.get('paper', ''),
+                    'paper_title': q.get('paper_title', ''),
+                    'section': q.get('section', ''),
+                    'marks': q.get('marks', 0),
+                }
+                q_ops.append(UpdateOne(q_filter, {'$set': q_doc}, upsert=True))
+
+            if q_ops:
+                result = db.questions.bulk_write(q_ops, ordered=False)
+                questions_upserted += result.upserted_count + result.modified_count
 
     # ── Create Indexes ──
     print("📇 Creating indexes...")
@@ -162,17 +190,36 @@ def seed(subject):
     db.topics.create_index([('subject', 1), ('frequency_count', -1)])
     db.topics.create_index([('subject', 1), ('is_high_yield', 1)])
 
+    # Unique constraints — may fail if old data has duplicates
+    try:
+        db.topics.create_index([('topic_name', 1), ('subject', 1)], unique=True)
+    except Exception as e:
+        if 'duplicate' in str(e).lower() or 'E11000' in str(e):
+            print(f"  ⚠️ Duplicate topics exist — skipping unique index (run with --clean to fix)")
+        else:
+            print(f"  ⚠️ Index warning: {e}")
+
     # Questions: lookup by topic, filter by subject+year
     db.questions.create_index('topic_id')
     db.questions.create_index('subject')
     db.questions.create_index([('subject', 1), ('year', -1)])
-    db.questions.create_index('question_id', unique=False)
+
+    try:
+        db.questions.create_index([('question_id', 1), ('subject', 1)], unique=True)
+    except Exception as e:
+        if 'duplicate' in str(e).lower() or 'E11000' in str(e):
+            print(f"  ⚠️ Duplicate questions exist — skipping unique index (run with --clean to fix)")
+        else:
+            print(f"  ⚠️ Index warning: {e}")
 
     # ── Summary ──
+    actual_topics = db.topics.count_documents({'subject': subject})
+    actual_questions = db.questions.count_documents({'subject': subject})
+
     print(f"\n{'='*50}")
     print(f"✅ MongoDB Seeding Complete — {subject}")
-    print(f"   Topics:    {topics_inserted}")
-    print(f"   Questions: {questions_inserted}")
+    print(f"   Topics:    {actual_topics}")
+    print(f"   Questions: {actual_questions}")
     print(f"{'='*50}")
 
     # Show top topic
@@ -203,7 +250,8 @@ def main():
         return
 
     subject = sys.argv[1] if len(sys.argv) > 1 else 'Pathology'
-    seed(subject)
+    clean_mode = '--clean' in sys.argv
+    seed(subject, clean_mode=clean_mode)
 
 
 if __name__ == '__main__':
