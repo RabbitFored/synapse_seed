@@ -13,15 +13,7 @@ import os
 import sys
 
 import config
-
-YEAR_MAP = {
-    'Anatomy': ('year_1', '1st Year MBBS'),
-    'Physiology': ('year_1', '1st Year MBBS'),
-    'Biochemistry': ('year_1', '1st Year MBBS'),
-    'Pathology': ('year_2', '2nd Year MBBS'),
-    'Pharmacology': ('year_2', '2nd Year MBBS'),
-    'Microbiology': ('year_2', '2nd Year MBBS'),
-}
+import pipeline_utils
 
 
 def main():
@@ -40,29 +32,31 @@ def main():
         print(f"❌ No topics found in {input_path}")
         return
 
-    year_id, year_name = YEAR_MAP.get(subject, ('year_2', '2nd Year MBBS'))
+    phase_id, phase_name = pipeline_utils.get_subject_phase(subject)
+    overrides = pipeline_utils.load_overrides(subject)
 
     p1_chapters = []
     p2_chapters = []
 
-    for idx, t in enumerate(topics):
+    try:
+        from tqdm import tqdm
+        iterable = tqdm(topics, desc="  Exporting to App", unit="topic", 
+                        bar_format='{l_bar}{bar:30}{r_bar}', colour='blue')
+    except ImportError:
+        iterable = topics
+
+    for idx, t in enumerate(iterable):
         topic_id = f"topic_{idx}"
         topic_name = t.get('display_title') or t.get('topic_name')
 
         app_questions = []
-        p1_count = 0
-        p2_count = 0
 
-        for q in t.get('questions', []):
-            if q.get('paper') == 'p1':
-                p1_count += 1
-            else:
-                p2_count += 1
-
+        q_list = t.get('questions', [])
+        for q in q_list:
             app_questions.append({
                 "id": q.get('id'),
                 "title": q.get('text')[:40] + "..." if len(q.get('text', '')) > 40 else q.get('text'),
-                "type": "long" if q.get('marks', 0) >= 10 else "short",
+                "type": "long" if q.get('marks', 0) >= 10 else ("mcq" if q.get('section') == 'MCQ' else "short"),
                 "tags": [str(q.get('year'))],
                 "importance": "high" if t.get('frequency_count', 0) >= 3 else "normal",
                 "description": q.get('text')
@@ -74,7 +68,11 @@ def main():
             "questions": app_questions
         }
 
-        if p1_count >= p2_count:
+        # Resolve paper logic directly on topic questions list!
+        chapter_name = t.get('chapter', '')
+        paper_id = pipeline_utils.resolve_paper_latest_year(q_list, chapter_name, overrides)
+
+        if '1' in str(paper_id):
             p1_chapters.append(chapter_obj)
         else:
             p2_chapters.append(chapter_obj)
@@ -82,8 +80,8 @@ def main():
     schema = {
         "years": [
             {
-                "id": year_id,
-                "name": year_name,
+                "id": phase_id,
+                "name": phase_name,
                 "subjects": [
                     {
                         "id": subject.lower(),
@@ -111,6 +109,7 @@ def main():
         json.dump(schema, f, indent=2, ensure_ascii=False)
 
     print(f"✅ Exported {len(topics)} topics for {subject} → Flutter App format")
+    print(f"   Phase: {phase_name}")
     print(f"   Paper 1: {len(p1_chapters)} chapters | Paper 2: {len(p2_chapters)} chapters")
     print(f"💾 Saved to {output_path}")
 

@@ -5,6 +5,7 @@
 # Usage:
 #   ./run_pipeline.sh                  # Process ALL subjects from taxonomy keys
 #   ./run_pipeline.sh Pathology        # Process a single subject
+#   ./run_pipeline.sh Pathology --force # Force re-flatten and re-canonicalize
 #   ./run_pipeline.sh --ping           # Test MongoDB connectivity
 #   ./run_pipeline.sh --config         # Show current config
 #
@@ -35,38 +36,39 @@ if [ ! -f "$PYTHON" ]; then
     PYTHON="python3"
 fi
 
-# ── Config test ──
-if [ "$1" = "--config" ]; then
-    $PYTHON "$SCRIPT_DIR/config.py"
-    exit 0
-fi
+# Parse args
+FORCE_ARG=""
+SUBJECT_ARG=""
+ALL_MODE=false
 
-# ── MongoDB ping test ──
-if [ "$1" = "--ping" ]; then
-    echo "🔌 Testing MongoDB connection..."
-    $PYTHON "$SCRIPT_DIR/seed_mongo.py" --ping
-    exit 0
-fi
+for arg in "$@"; do
+    if [ "$arg" = "--force" ]; then
+        FORCE_ARG="--force"
+    elif [ "$arg" = "--config" ]; then
+        $PYTHON "$SCRIPT_DIR/config.py"
+        exit 0
+    elif [ "$arg" = "--ping" ]; then
+        echo "🔌 Testing MongoDB connection..."
+        $PYTHON "$SCRIPT_DIR/seed_mongo.py" --ping
+        exit 0
+    elif [ "$arg" = "--all" ]; then
+        ALL_MODE=true
+    elif [ -z "$SUBJECT_ARG" ] && [[ "$arg" != -* ]]; then
+        SUBJECT_ARG="$arg"
+    fi
+done
 
 # ── Discover subjects from taxonomy keys ──
 get_all_subjects() {
     $PYTHON -c "
 import json, os, config
-subjects = []
-for fname in os.listdir(config.TAXONOMY_DIR):
-    if fname.endswith('.json'):
-        with open(os.path.join(config.TAXONOMY_DIR, fname)) as f:
-            data = json.load(f)
-        for key in data:
-            if key != '_meta':
-                subjects.append(key)
-# Print unique, preserving order
-seen = set()
-for s in subjects:
-    if s not in seen:
-        seen.add(s)
-        print(s)
-"
+path = os.path.join(config.TAXONOMY_DIR, 'universal_subject_chapters.json')
+with open(path) as f:
+    data = json.load(f)
+for key in data:
+    if key != '_meta':
+        print(key)
+" 2>/dev/null
 }
 
 # ── Process a single subject ──
@@ -76,20 +78,20 @@ process_subject() {
 
     echo ""
     echo "╔══════════════════════════════════════════════════╗"
-    echo "║  📚 $SUBJECT"
+    echo "║  📚 $SUBJECT $FORCE_ARG"
     echo "╚══════════════════════════════════════════════════╝"
 
     echo ""
     echo "  ━━━ Stage 1: Flatten & Normalize ━━━"
-    $PYTHON "$SCRIPT_DIR/flatten.py" "$SUBJECT"
+    $PYTHON "$SCRIPT_DIR/flatten.py" "$SUBJECT" $FORCE_ARG
 
     echo ""
     echo "  ━━━ Stage 2-4: Canonicalize + Cluster + Metadata ━━━"
-    $PYTHON "$SCRIPT_DIR/canonicalize.py" "$SUBJECT"
+    $PYTHON "$SCRIPT_DIR/canonicalize.py" "$SUBJECT" $FORCE_ARG
 
     echo ""
     echo "  ━━━ Stage 5: Seed MongoDB (upsert) ━━━"
-    $PYTHON "$SCRIPT_DIR/seed_mongo.py" "$SUBJECT"
+    $PYTHON "$SCRIPT_DIR/seed_mongo.py" "$SUBJECT" --cleanup
 
     local END_TIME=$(date +%s)
     local ELAPSED=$(( END_TIME - START_TIME ))
@@ -107,12 +109,12 @@ echo ""
 echo "  🤖 AI Provider: $($PYTHON -c 'import ai_client; print(ai_client.get_provider_info())')"
 echo ""
 
-if [ -n "$1" ] && [ "$1" != "--all" ]; then
+if [ -n "$SUBJECT_ARG" ]; then
     # Single subject mode
     echo "╔══════════════════════════════════════════════════╗"
     echo "║  Synapse AI Pipeline — Single Subject            ║"
     echo "╚══════════════════════════════════════════════════╝"
-    process_subject "$1"
+    process_subject "$SUBJECT_ARG"
 else
     # All subjects mode
     SUBJECTS=$(get_all_subjects)
@@ -120,21 +122,21 @@ else
 
     echo "╔══════════════════════════════════════════════════╗"
     echo "║  Synapse AI Pipeline — All Subjects              ║"
-    echo "║  Found $SUBJECT_COUNT subjects in taxonomy keys"
+    echo "║  Found $SUBJECT_COUNT subjects in universal config "
     echo "╚══════════════════════════════════════════════════╝"
 
     echo ""
     echo "  Subjects to process:"
     INDEX=1
-    echo "$SUBJECTS" | while read -r S; do
+    while IFS= read -r S; do
         echo "    $INDEX. $S"
         INDEX=$((INDEX + 1))
-    done
+    done <<< "$SUBJECTS"
     echo ""
 
-    echo "$SUBJECTS" | while read -r SUBJECT; do
+    while IFS= read -r SUBJECT; do
         process_subject "$SUBJECT"
-    done
+    done <<< "$SUBJECTS"
 fi
 
 TOTAL_END=$(date +%s)

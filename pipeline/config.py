@@ -29,8 +29,38 @@ except ImportError:
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'pipeline_output')
-RAW_JSON_DIR = os.path.join(DATA_DIR, 'pyq', 'TNMGRU', 'processed', 'json')
+RAW_JSON_DIR = os.path.join(DATA_DIR, 'pyq', '{university}', 'processed', 'json')
 TAXONOMY_DIR = os.path.join(os.path.dirname(__file__), 'taxonomy_keys')
+OVERRIDES_DIR = os.path.join(TAXONOMY_DIR, 'overrides')
+
+# ── University settings ────────────────────────────────────
+UNIVERSITY = os.environ.get('UNIVERSITY', 'TNMGRU')
+RAW_JSON_DIR = RAW_JSON_DIR.format(university=UNIVERSITY)
+
+# ── Subject Name Mapping ──────────────────────────────────
+# Maps canonical taxonomy names → actual data folder names.
+# Only subjects with mismatched names need to be listed here.
+# If a subject is NOT in this map, it uses its taxonomy name as-is.
+SUBJECT_FOLDER_MAP = {
+    'Forensic Medicine and Toxicology': 'Forensic Medicine',
+    'Obstetrics and Gynaecology': 'Obstetrics & Gynaecology',
+    'Ophthalmology': 'Opthalmology',
+    'ENT': 'Oto-Rhino-Laryngology',
+    'Paediatrics': 'Pediatrics',
+}
+
+# Reverse map: folder name → canonical taxonomy name
+FOLDER_SUBJECT_MAP = {v: k for k, v in SUBJECT_FOLDER_MAP.items()}
+
+
+def get_subject_folder(canonical_name):
+    """Get the actual data folder name for a canonical taxonomy subject name."""
+    return SUBJECT_FOLDER_MAP.get(canonical_name, canonical_name)
+
+
+def get_canonical_subject(folder_name):
+    """Get the canonical taxonomy name from a data folder name."""
+    return FOLDER_SUBJECT_MAP.get(folder_name, folder_name)
 
 # ── AI Provider ────────────────────────────────────────────
 # Options: 'gemini', 'groq', 'ollama'

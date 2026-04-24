@@ -35,12 +35,27 @@ echo "║  Source: TNMGRMU (tnmgrmu.ac.in)                 ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
+# Parse arguments
+SKIP_SCRAPE=false
+for arg in "$@"; do
+    if [ "$arg" == "--skip-scrape" ]; then
+        SKIP_SCRAPE=true
+    fi
+done
+
 # ── Step 1: Download PDFs ──
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Step 1/5: Downloading PYQ PDFs from TNMGRMU..."
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-python3 "$SCRIPT_DIR/scrape_pyq.py"
-echo ""
+if [ "$SKIP_SCRAPE" = true ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Step 1/5: ⏭️  Skipping download phase (using cached data)..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Step 1/5: Downloading PYQ PDFs from TNMGRMU..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    python3 "$SCRIPT_DIR/scrape_pyq.py"
+    echo ""
+fi
 
 # ── Step 2: Organize by Subject ──
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

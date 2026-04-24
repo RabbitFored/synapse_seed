@@ -1,5 +1,7 @@
 import os
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 import urllib.parse
 import re
@@ -15,6 +17,22 @@ ug_courses = [
     ("THIRD M.B.B.S. Part II", "https://www.tnmgrmu.ac.in/index.php/library/e-questions/third-m-b-b-s-part-ii.html")
 ]
 
+# Set up a robust session with retries
+session = requests.Session()
+retry = Retry(
+    total=5,
+    read=5,
+    connect=5,
+    backoff_factor=1,
+    status_forcelist=[500, 502, 503, 504],
+)
+adapter = HTTPAdapter(max_retries=retry)
+session.mount('http://', adapter)
+session.mount('https://', adapter)
+# Disable SSL warnings since verify=False is used
+requests.packages.urllib3.disable_warnings()
+
+
 def sanitize_filename(name):
     return re.sub(r'[<>:"/\\|?*]+', '_', name).strip()
 
@@ -25,7 +43,7 @@ def download_file(url, filepath):
             return True # skipped
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, stream=True, headers=headers, verify=False, timeout=30)
+        r = session.get(url, stream=True, headers=headers, verify=False, timeout=30)
         r.raise_for_status()
         with open(filepath, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
@@ -35,7 +53,6 @@ def download_file(url, filepath):
     except Exception as e:
         return f"Error downloading {url}: {e}"
 
-requests.packages.urllib3.disable_warnings()
 
 downloads = []
 
@@ -43,7 +60,7 @@ print("Phase 1: Collecting all pyq links...")
 for course_name, course_url in ug_courses:
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(course_url, headers=headers, verify=False)
+        r = session.get(course_url, headers=headers, verify=False, timeout=20)
         r.raise_for_status()
     except Exception as e:
         print(f"Failed to fetch {course_url}: {e}")

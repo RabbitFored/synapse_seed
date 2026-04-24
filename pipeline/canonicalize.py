@@ -42,49 +42,20 @@ COOLDOWN_SECONDS = config.COOLDOWN_SECONDS
 # =====================================================
 
 def load_taxonomy(subject):
-    for fname in ['yr1_subject_paper_chapters.json', 'yr2_subject_paper_chapters.json']:
-        path = os.path.join(TAXONOMY_DIR, fname)
-        if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if subject in data:
-                    return data[subject]
+    path = os.path.join(TAXONOMY_DIR, 'universal_subject_chapters.json')
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get(subject)
     return None
 
 
 def get_all_chapters(taxonomy):
+    """Taxonomy is now just a list of chapters."""
     if not taxonomy:
         return ["General"]
-    chapters = []
-    for pk in ['paper_1', 'paper_2']:
-        if pk in taxonomy:
-            chapters.extend(taxonomy[pk].get('chapters', []))
-    return chapters
+    return taxonomy
 
-
-def resolve_paper_for_topic(topic_questions, taxonomy):
-    if not taxonomy:
-        return 'paper_1', 'Unknown'
-
-    paper_counts = defaultdict(int)
-    for q in topic_questions:
-        pt = (q.get('paper_title') or "").upper()
-        matched = None
-        for pk in ['paper_1', 'paper_2']:
-            patterns = taxonomy.get(pk, {}).get('paper_title_patterns', [])
-            if any(p.upper() in pt for p in patterns):
-                matched = pk
-                break
-        if not matched:
-            raw = str(q.get('paper', '')).lower()
-            matched = 'paper_1' if raw == 'p1' else ('paper_2' if raw == 'p2' else None)
-        if matched:
-            paper_counts[matched] += 1
-
-    if paper_counts:
-        dominant = max(paper_counts, key=paper_counts.get)
-        return dominant, taxonomy.get(dominant, {}).get('name', dominant)
-    return 'paper_1', taxonomy.get('paper_1', {}).get('name', 'Paper 1')
 
 
 # =====================================================
@@ -455,15 +426,14 @@ def build_output(sorted_topics, metadata, subject, taxonomy):
         for q in qs:
             year_freq[q['year']] += 1
 
-        paper_id, paper_name = resolve_paper_for_topic(qs, taxonomy)
-
+        # Get chapter from metadata first
+        chapter_name = meta.get('chapter', 'General')
+        
         output.append({
             'topic_name': name,
             'display_title': meta.get('display_title', name),
             'subject': subject,
-            'chapter': meta.get('chapter', 'General'),
-            'paper': paper_name,
-            'paper_id': paper_id,
+            'chapter': chapter_name,
             'frequency_count': len(qs),
             'study_checklist': meta.get('study_checklist', []),
             'high_yield_angles': meta.get('high_yield_angles', []),
@@ -504,8 +474,21 @@ def build_output(sorted_topics, metadata, subject, taxonomy):
 # =====================================================
 
 def main():
-    subject = sys.argv[1] if len(sys.argv) > 1 else 'Pathology'
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('subject', nargs='?', default='Pathology')
+    parser.add_argument('--force', action='store_true', help='Force re-canonicalizing all topics by clearing cache')
+    args = parser.parse_args()
+    
+    subject = args.subject
     input_path = os.path.join(OUTPUT_DIR, subject, 'flattened_questions.json')
+
+    if args.force:
+        canon_path = os.path.join(OUTPUT_DIR, subject, 'canonicalize_progress.json')
+        meta_path = os.path.join(OUTPUT_DIR, subject, 'metadata_progress.json')
+        if os.path.exists(canon_path): os.remove(canon_path)
+        if os.path.exists(meta_path): os.remove(meta_path)
+        print(f"⚠️ Force mode: Deleted progress files for {subject}")
 
     if not os.path.exists(input_path):
         print(f"❌ Not found: {input_path}")

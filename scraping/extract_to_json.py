@@ -63,8 +63,9 @@ MARKS_RE = re.compile(r"\((\d+)\s*[x×]\s*(\d+)\s*=\s*(\d+)\)")
 # Numbered question: "1.", "1)", "1 ."
 Q_NUM_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+", re.MULTILINE)
 
-# MCQ option line: "A)" or "A. "
-OPT_RE = re.compile(r"^\s*([A-D])\s*[.)]\s*(.+)", re.MULTILINE)
+# MCQ option marker: "A)" or "A." — matches anywhere in text (not just start of line)
+# Uses word boundary or whitespace/start to avoid matching mid-word
+OPT_RE = re.compile(r"(?:^|\s)([A-D])\s*[.)]\s*", re.MULTILINE)
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────
@@ -228,10 +229,13 @@ def parse_mcq_session(session_text: str) -> list[dict]:
     for i, (start, num) in enumerate(positions):
         end = positions[i + 1][0] if i + 1 < len(positions) else len(body)
         q_chunk = body[start:end]
-        # First line is question text (before first option)
-        opt_matches = list(OPT_RE.finditer(q_chunk))
-        if opt_matches:
-            q_text_raw = q_chunk[: opt_matches[0].start()]
+
+        # Find all option markers (A/B/C/D) anywhere in text
+        opt_markers = list(OPT_RE.finditer(q_chunk))
+
+        if opt_markers:
+            # Question text is everything before the first option marker
+            q_text_raw = q_chunk[: opt_markers[0].start()]
         else:
             q_text_raw = q_chunk
 
@@ -241,9 +245,18 @@ def parse_mcq_session(session_text: str) -> list[dict]:
         if not q_text or len(q_text) < 5:
             continue
 
+        # Extract option text between consecutive markers
         options = {}
-        for opt in opt_matches:
-            options[opt.group(1)] = clean(opt.group(2))
+        for j, opt_match in enumerate(opt_markers):
+            letter = opt_match.group(1)
+            opt_start = opt_match.end()
+            if j + 1 < len(opt_markers):
+                opt_end = opt_markers[j + 1].start()
+            else:
+                opt_end = len(q_chunk)
+            opt_text = clean(q_chunk[opt_start:opt_end])
+            if opt_text:
+                options[letter] = opt_text
 
         questions.append({
             "number": int(num),
@@ -316,52 +329,80 @@ def process_combined(combined_path: Path, subject: str, year: int, paper: str) -
 
 # ─── Batch runner ────────────────────────────────────────────────────────────
 
-tasks = []
+def main():
+    tasks = []
 
-for subject_dir in sorted(source_dir.iterdir()):
-    if not subject_dir.is_dir():
-        continue
-    subject = subject_dir.name
-    for year_dir in sorted(subject_dir.iterdir()):
-        if not year_dir.is_dir():
+    for subject_dir in sorted(source_dir.iterdir()):
+        if not subject_dir.is_dir():
             continue
-        try:
-            year = int(year_dir.name)
-        except ValueError:
-            continue
-        for paper_dir in sorted(year_dir.iterdir()):
-            if not paper_dir.is_dir():
+        subject = subject_dir.name
+        for year_dir in sorted(subject_dir.iterdir()):
+            if not year_dir.is_dir():
                 continue
-            paper = paper_dir.name
+            try:
+                year = int(year_dir.name)
+            except ValueError:
+                continue
+            for paper_dir in sorted(year_dir.iterdir()):
+                if not paper_dir.is_dir():
+                    continue
+                paper = paper_dir.name
 
-            theory = next(paper_dir.glob("*_theory.pdf"), None)
-            mcq = next(paper_dir.glob("*_mcq.pdf"), None)
-            combined = next(paper_dir.glob("*_combined.pdf"), None)
+                theory = next(paper_dir.glob("*_theory.pdf"), None)
+                mcq = next(paper_dir.glob("*_mcq.pdf"), None)
+                combined = next(paper_dir.glob("*_combined.pdf"), None)
 
-            if theory or mcq or combined:
-                tasks.append((subject, year, paper, theory, mcq, combined))
+                if theory or mcq or combined:
+                    tasks.append((subject, year, paper, theory, mcq, combined))
 
-print(f"Processing {len(tasks)} PDF sets into JSON...")
+    print(f"Processing {len(tasks)} PDF sets into JSON...")
 
-errors = 0
-with tqdm(total=len(tasks), desc="Extracting", unit="set") as pbar:
-    for subject, year, paper, theory, mcq, combined in tasks:
-        pbar.set_postfix_str(f"{subject}/{year}/{paper}")
-        try:
-            if combined:
-                data = process_combined(combined, subject, year, paper)
-            else:
-                data = process_pair(theory, mcq, subject, year, paper)
+    errors = 0
+    with tqdm(total=len(tasks), desc="  Extracting JSON", unit="set", 
+              bar_format='{l_bar}{bar:30}{r_bar}', colour='blue') as pbar:
+        for subject, year, paper, theory, mcq, combined in tasks:
+            pbar.set_postfix_str(f"{subject}/{year}/{paper}")
+            try:
+                if combined:
+                    data = process_combined(combined, subject, year, paper)
+                    # If a separate MCQ file also exists, merge its MCQs
+                    # (combined PDFs often only contain theory content)
+                    if mcq and mcq.exists():
+                        for raw in extract_sessions(mcq):
+                            meta = parse_header(raw)
+                            if not meta["year"]:
+                                continue
+                            mcq_questions = parse_mcq_session(raw)
+                            if mcq_questions:
+                                # Try to find matching session by month
+                                matched = False
+                                for sess in data["sessions"]:
+                                    if sess.get("month") == meta.get("month") and not sess.get("mcq_questions"):
+                                        sess["mcq_questions"] = mcq_questions
+                                        matched = True
+                                        break
+                                if not matched:
+                                    # Add as separate session if no month match
+                                    data["sessions"].append({
+                                        **meta,
+                                        "theory_sections": [],
+                                        "mcq_questions": mcq_questions,
+                                    })
+                else:
+                    data = process_pair(theory, mcq, subject, year, paper)
 
-            out_dir = target_dir / subject / str(year)
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{paper}.json"
-            with open(out_path, "w") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            tqdm.write(f"ERROR {subject}/{year}/{paper}: {e}")
-            errors += 1
-        pbar.update(1)
+                out_dir = target_dir / subject / str(year)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_path = out_dir / f"{paper}.json"
+                with open(out_path, "w") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                tqdm.write(f"ERROR {subject}/{year}/{paper}: {e}")
+                errors += 1
+            pbar.update(1)
 
-print(f"\nDone! {len(tasks) - errors} JSONs written, {errors} errors.")
-print(f"Output: {target_dir}")
+    print(f"\nDone! {len(tasks) - errors} JSONs written, {errors} errors.")
+    print(f"Output: {target_dir}")
+
+if __name__ == '__main__':
+    main()
